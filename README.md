@@ -1,2 +1,2 @@
 # Computer-Networks-Project
-In this project, we will build a client and a server application where client-to-client communication, excluding a server, is possible. The server application will only be used to share contact information about the clients and store the files that have been transferred
+In this project, we will create a game around Riffusion, an AI music generator. This will be done by creating a client and server application. The server will provide a platform for clients to play a guessing music game with Riffusion
