@@ -30,22 +30,27 @@ def prompter(conn: socket.socket, addr, sess: Session):
       if type(client) == str:
         print("ValueError")
       if client["task"] == "prompt":
-          music: str = ""
-          for i in range(0, 5):
-              newChunk: Union[str, None] = sess.promptMusic(client["promptStart"], client["promptEnd"], i / 4)
-              if newChunk != None:
-                music += newChunk
-              else:
-                None # implement that
+          newChunk: Union[str, None] = sess.promptMusic(client["promptStart"], client["promptEnd"])
+          if newChunk == None:
+            print("Riffusion is not setup yet")
+          else:
+            None # implement that
           prompt: Prompt = Prompt(
              promptStart=client["promptStart"],
              promptEnd=client["promptEnd"],
-             promptMusic=music,
+             promptMusic=newChunk,
           )
           sess.addPrompt(prompt=prompt)
       if client["task"] == "vote":
          vote: bool = bool(client["vote"])
          sess.vote(voting=vote, promptNum=client["promptNum"]) #prompter code (send to other function)
+      if client["task"] == "guess":
+         prompts: list[Prompt] = sess.getPrompts()
+         promptNum: int = int(client["promptNum"])
+         if promptNum < len(prompts):
+            truth: bool = prompts[promptNum].getPrompt().lower() == client["prompt"].lower()
+            d: dict = {"truth": str(truth)}
+            conn.sendall(convert(d))
       if client["task"] == "end":
          stop = True
          conn.close()
@@ -115,6 +120,9 @@ def start_server():
             break
 
     # Close the server socket when the maximum number of game instances has been reached
+    with agi_lock:
+       for session in active_game_instances:
+          session.disactivateMusic()
     server_socket.close()
     udp_socket.close()
     ngrok.disconnect(tunnel.public_url)

@@ -65,9 +65,17 @@ class Client2:
                 self.send_prompt_button["state"] = "disabled"
         
         def guess_prompt(self):
-                # Send guess prompt request to server over TCP
-                self.tcp_socket.send('guess'.encode())
-        
+                # Send guess prompt request to server over TCP                
+                prompt = self.prompt_entry.get()
+                msg = {"task": "guess", "prompt": prompt, "promptNum": 0}
+                self.tcp_socket.send(convert(msg))
+                mess = self.tcp_socket.recv(1024)
+                truth = deconvert(mess)
+                if type(truth) == str:
+                       print("Error: truth")
+                else:
+                       self.guess = truth["truth"] == "True"
+
         def send_invitation(self):
                 # Send invitation to server over TCP
                 invitation = self.invitations_listbox.get(tk.ACTIVE)

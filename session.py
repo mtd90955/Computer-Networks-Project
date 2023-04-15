@@ -1,4 +1,5 @@
 import socket, threading, ast, typing
+from util import convert, deconvert
 
 CHUNK = 1024
 
@@ -6,7 +7,9 @@ CHUNK = 1024
 class Prompt:
    promptStart: str
    promptEnd: str
+   prompt_lock: threading.Lock = threading.Lock()
    promptMusic: str
+   prompt_music_lock: threading.Lock = threading.Lock()
    votes_up: int = 0
    votes_down: int = 0
    vote_lock: threading.Lock = threading.Lock()
@@ -23,23 +26,35 @@ class Prompt:
            else:
                self.votes_down += 1
    
-   def getVotesUp(self):
+   def getVotesUp(self) -> int:
        temp: int = 0
        with self.vote_lock:
            temp = self.votes_up
        return temp
    
-   def getVotesDown(self):
+   def getVotesDown(self) -> int:
        temp: int = 0
        with self.vote_lock:
            temp = self.votes_down
        return temp
    
-   def getNetVotes(self):
+   def getNetVotes(self) -> int:
        temp: int = 0
        with self.vote_lock:
            temp = self.votes_up - self.votes_down
        return temp
+   
+   def getPrompt(self) -> str:
+      temp: str = ""
+      with self.prompt_lock:
+         temp = self.promptStart
+      return temp
+
+   def getPromptMusic(self) -> str:
+      temp: str = ""
+      with self.prompt_music_lock:
+         temp = self.promptMusic
+      return temp
 
 class Session:
     music_socket: typing.Union[socket.socket, None] = None
@@ -50,29 +65,26 @@ class Session:
     prompts_lock: threading.Lock = threading.Lock()
     
 
-    def promptMusic(self, promptStart: str, promptEnd: str,
-                    alpha: float) -> typing.Union[str, None]:
+    def promptMusic(self, promptStart: str, promptEnd: str) -> typing.Union[str, None]:
        buffer: str = ""
        prompt: dict[str, str] = {
           "promptStart": promptStart,
           "promptEnd": promptEnd,
-          "alpha": alpha,
         }
        with self.music_socket_lock:
           if self.music_socket is not None:
-             self.music_socket.send(prompt)
+             self.music_socket.send(convert(prompt))
              stop: bool = False
              while not stop:
                 message = self.music_socket.recv(4 * CHUNK)
-                try:
-                    data = ast.literal_eval(message)
-                    if data["data"] == "end":
-                       stop = True
-                       continue
-                    buffer += data["data"]
-                except ValueError:
+                data = deconvert(message)
+                if type(data) == str:
                    print("ValueError in promptMusic")
                    return buffer
+                if data["data"] == "end":
+                   stop = True
+                   continue
+                buffer += data["data"]
           else:
              return None
        return buffer
@@ -120,3 +132,9 @@ class Session:
              )
              temp.append(tempPrompt)
        return temp
+    
+    def disactivateMusic(self) -> None:
+       close: dict[str, str] = {"promptStart": "endstart", "promptEnd": "endend",}
+       with self.music_socket_lock:
+          if self.music_socket is not None:
+             self.music_socket.send(convert(close))
