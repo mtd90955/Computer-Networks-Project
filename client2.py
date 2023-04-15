@@ -3,10 +3,11 @@ import threading
 import tkinter as tk
 from tkinter import messagebox
 from util import convert, deconvert # Message conveersion
+import sys # command line args
 
 # Constants
-SERVER_ADDRESS = '3.13.191.225'
-SERVER_TCP_PORT = 18567
+SERVER_ADDRESS = '3.13.191.225' if len(sys.argv) < 2 else sys.argv[1]
+SERVER_TCP_PORT = 18567 if len(sys.argv) < 3 else int(sys.argv[2])
 SERVER_UDP_PORT = 2352
 MAX_CONNECTIONS = 50
 AUDIO_BUFFER_SIZE = 1024

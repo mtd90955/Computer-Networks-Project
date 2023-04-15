@@ -6,10 +6,12 @@ Created on Sun Mar 12 14:49:26 2023
 """
 
 import socket # for sockets
-import threading # for multithreading
-import ast # for dict conversion
+import threading
+from typing import Union # for multithreading
 from session import Session, Prompt # Game Session info
-from util import convert, deconvert # Message conveersion
+from util import convert, deconvert, get_ngrok_public_ip_address # Message conversion
+from pyngrok import ngrok # to avoid hosting server
+ngrok.kill() # Ensures no starting connection
 # Maximum number of connections allowed
 MAX_CONNECTIONS = 50
 
@@ -17,7 +19,7 @@ MAX_CONNECTIONS = 50
 MAX_GAME_INSTANCES = 1
 
 # List of active game instances
-active_game_instances: list[Session] = [Session()]
+active_game_instances: list[Session] = [Session() for _ in range(MAX_GAME_INSTANCES)]
 agi_lock: threading.Lock = threading.Lock()
 
 def prompter(conn: socket.socket, addr, sess: Session):
@@ -30,7 +32,11 @@ def prompter(conn: socket.socket, addr, sess: Session):
       if client["task"] == "prompt":
           music: str = ""
           for i in range(0, 5):
-              music += sess.promptMusic(client["promptStart"], client["promptEnd"], i / 4)
+              newChunk: Union[str, None] = sess.promptMusic(client["promptStart"], client["promptEnd"], i / 4)
+              if newChunk != None:
+                music += newChunk
+              else:
+                None # implement that
           prompt: Prompt = Prompt(
              promptStart=client["promptStart"],
              promptEnd=client["promptEnd"],
@@ -66,7 +72,8 @@ def handle_client_connection(conn: socket.socket, addr):
               print("IDK")
               return
     if client["client"] == "prompter":
-       prompter(conn=conn, addr=addr, sess=active_game_instances[sessionNum]) #prompter method
+       with agi_lock:
+        prompter(conn=conn, addr=addr, sess=active_game_instances[sessionNum]) #prompter method
     if client["client"] == "viewer":
        None #viewer code (send to other function)
     conn.close()
@@ -78,9 +85,18 @@ def start_server():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind(('', 2351))
     server_socket.listen()
-
     print("Server listening on port 2351")
 
+    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
+    udp_socket.bind(('', (2352)))
+    print("Server listening on port 2352")
+
+    # set up ngrok tcp tunnel
+    tunnel = ngrok.connect(2351, "tcp")
+
+    print(get_ngrok_public_ip_address(tunnel))
+    
     # Keep accepting new connections until the maximum number of connections is reached
     while len(active_game_instances) <= MAX_GAME_INSTANCES:
         try:
@@ -100,6 +116,8 @@ def start_server():
 
     # Close the server socket when the maximum number of game instances has been reached
     server_socket.close()
-
+    udp_socket.close()
+    ngrok.disconnect(tunnel.public_url)
+    ngrok.kill()
 # Start the server
 start_server()
