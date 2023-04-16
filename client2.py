@@ -17,17 +17,12 @@ class Client:
         # Initialize TCP socket
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.tcp_socket.connect((SERVER_ADDRESS, SERVER_TCP_PORT))
-
-        # Vote counts
-        self.good_vote_count = 0
-        self.bad_vote_count = 0
-        
         # Initialize GUI
         self.root = tk.Tk()
         self.current_color = '#FFFFFF'
         self.target_color = self.generate_random_color()
-        self.root.geometry("500x500+200+200")
         self.root.configure(bg=self.current_color)
+        self.root.geometry("500x500+200+200")        
         self.root.title('Riffusion Client')
         self.create_widgets()
 
@@ -79,25 +74,32 @@ class Client:
         self.good_votes = 0
         tk.Button(vote_frame, text='Good', command=self.cast_good_vote).grid(row=0, column=0)
         tk.Label(vote_frame, text='Good Votes:').grid(row=0, column=1)
-        self.good_count_label = tk.Label(vote_frame, text=str(self.good_votes))
+        self.good_count_label = tk.Label(vote_frame, text="Vote now to see vote count")
         self.good_count_label.grid(row=0, column=2)
         # Create bad vote button and count label
         self.bad_votes = 0
         tk.Button(vote_frame, text='Bad', command=self.cast_bad_vote).grid(row=1, column=0)
         tk.Label(vote_frame, text='Bad Votes:').grid(row=1, column=1)
-        self.bad_count_label = tk.Label(vote_frame, text=str(self.bad_votes))
+        self.bad_count_label = tk.Label(vote_frame, text="Vote now to see vote count")
         self.bad_count_label.grid(row=1, column=2)
 
     def cast_good_vote(self):
-        # Increment good vote count and update label
-        self.good_votes += 1
+        # Send current vote counts over TCP to server
         self.tcp_socket.send("good".encode())
+        self.show_votes()
 
     def cast_bad_vote(self):
-        # Increment bad vote count and update label
-        self.bad_votes += 1
+        # Send current vote counts over TCP to server
         self.tcp_socket.send("bad".encode())
+        self.show_votes()
 
+    def show_votes(self):
+        data = self.tcp_socket.recv(1024).decode()
+        # Split the vote data into good and bad vote counts
+        _, good, bad = data.split(',')                                  
+        self.bad_count_label.config(text=str(bad))
+        self.good_count_label.config(text=str(good))
+        
     def send_invitation(self, peer_address):
         # Send an invitation to another client at the given address
         message = f"INVITE {self.username}"
@@ -134,5 +136,4 @@ class Client:
 
 if __name__ == '__main__':
     client = Client()
-    
     client.run()
