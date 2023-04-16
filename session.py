@@ -143,7 +143,7 @@ class Session:
                 if type(data) == str: # if something went wrong
                    print("ValueError in promptMusic")
                    return buffer # return incomplete buffer
-                if data["data"] == "end": # if it is the end
+                if data["data"] == "end" or data["end"] == "True": # if it is the end
                    stop = True # discontinue the loop
                    continue
                 buffer += data["data"] # concatinate received data
@@ -244,3 +244,15 @@ class Session:
              self.music_socket.send(convert(close)) # send closing prompt
              self.music_socket.close() # close connection
              self.music_socket = None # reset it to None
+
+    def checkIfReady(self) -> bool:
+       """
+       Checks to see if the prompt music is ready.
+
+       Returns:
+         bool: whether it is ready or not
+       """
+       temp: bool = False
+       with self.prompts_lock: # for thread safety
+          temp = len(self.prompts) >= 2 # check if limit is met
+       return temp

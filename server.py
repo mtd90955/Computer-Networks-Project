@@ -22,6 +22,9 @@ MAX_GAME_INSTANCES = 1
 active_game_instances: list[Session] = [Session() for _ in range(MAX_GAME_INSTANCES)] # list compression
 agi_lock: threading.Lock = threading.Lock() # active instances lock
 
+udp_socket: socket.socket
+udp_lock: threading.Lock = threading.Lock()
+
 def prompter(conn: socket.socket, addr, sess: Session):
    """
    Handles the prompter connection.
@@ -62,6 +65,7 @@ def prompter(conn: socket.socket, addr, sess: Session):
          stop = True # stop
          conn.close() # close conection
          continue
+
 
 def viewer(conn: socket.socket, addr, sess: Session):
    """
@@ -156,6 +160,7 @@ def start_server():
     print("Server listening on port 2351")
 
     # Setup UDP socket and bind it to port
+    global udp_socket
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
     udp_socket.bind(('', (2352)))
