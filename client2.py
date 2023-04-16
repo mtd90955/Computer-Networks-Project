@@ -19,9 +19,8 @@ class Client2:
                 self.tcp_socket.connect((SERVER_ADDRESS, SERVER_TCP_PORT))
         
                 # Initialize UDP socket for audio
-                #self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                #self.server_socket.bind(("", SERVER_UDP_PORT))
-                #self.udp_socket.connect((SERVER_ADDRESS, SERVER_UDP_PORT))
+                self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self.udp_socket.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF,AUDIO_BUFFER_SIZE)
         
                 # Start audio receiver thread
                 #self.audio_thread = threading.Thread(target=self.receive_audio)
@@ -92,8 +91,9 @@ class Client2:
         
         def receive_audio(self):
                 # Receive audio data from server over UDP and play it using a media player
+                self.udp_socket.sendto("Hello".encode(), (SERVER_ADDRESS, SERVER_UDP_PORT))
                 while True:
-                    data = self.udp_socket.recv(AUDIO_BUFFER_SIZE)
+                    data, addr = self.udp_socket.recvfrom(AUDIO_BUFFER_SIZE)
                     if not data:
                         break
 
