@@ -11,6 +11,8 @@ SERVER_TCP_PORT = 18567 if len(sys.argv) < 3 else int(sys.argv[2])
 SERVER_UDP_PORT = 2352
 MAX_CONNECTIONS = 50
 AUDIO_BUFFER_SIZE = 1024
+SESSION_NUM = 0 if len(sys.argv) < 4 else int(sys.argv[3])
+ROLE = "viewer" if len(sys.argv) < 5 else int(sys.argv[4])
 
 class Client2:
         def __init__(self):
@@ -30,7 +32,7 @@ class Client2:
                 self.root = tk.Tk()
                 self.root.title('Riffusion Client')
                 self.create_widgets()
-                self.initConnection(True, 0)
+                self.initConnection(ROLE.lower() == "prompter", SESSION_NUM)
                 self.root.mainloop()
         
         def create_widgets(self):
