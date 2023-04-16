@@ -106,38 +106,41 @@ def handle_client_connection(conn: socket.socket, addr):
     """
     print(f"New client connected: {addr}")
     # TODO: Implement game logic and audio transmission
-    message = conn.recv(1024) # receive message
-    client = deconvert(message) # try to deconvert it
-    if type(client) == str: # if failed, report it and close connection
-      print("ValueError")
-      conn.send(bytes("Error: -1", "utf-8"))
-      conn.close()
-      return
-    sessionNum: int = int(client["sessionNum"]) # get the session number
-    if client["client"] == "music": # if role is to provide music, set it in session
-        with agi_lock:
-           if sessionNum < len(active_game_instances):
-              active_game_instances[sessionNum].setSocket(conn=conn)
-              return
-           else:
-              print("IDK") # IDK how it would get here
-              return
-    if client["client"] == "prompter": # if role is prompter, give it to prompter
-       Sess: Session = None
-       with agi_lock: # for thread safety
-        if sessionNum < len(active_game_instances):
-         Sess = active_game_instances[sessionNum]
-        else:
-         Sess = active_game_instances[0] # fallback
-       prompter(conn=conn, addr=addr, sess=Sess) #prompter method
-    if client["client"] == "viewer": # if role is viewer, give it to viewer
-       Sess: Session = None
-       with agi_lock: # for thread safety
-        if sessionNum < len(active_game_instances):
-         Sess = active_game_instances[sessionNum]
-        else:
-         Sess = active_game_instances[0] # fallback
-       viewer(conn=conn, addr=addr, sess=Sess) #viewer code (send to other function)
+    try: # kill thread, print Error for any socket or conversion error not explicitly addressed
+      message = conn.recv(1024) # receive message
+      client = deconvert(message) # try to deconvert it
+      if type(client) == str: # if failed, report it and close connection
+        print("ValueError")
+        conn.send(bytes("Error: -1", "utf-8"))
+        conn.close()
+        return
+      sessionNum: int = int(client["sessionNum"]) # get the session number
+      if client["client"] == "music": # if role is to provide music, set it in session
+          with agi_lock:
+             if sessionNum < len(active_game_instances):
+                active_game_instances[sessionNum].setSocket(conn=conn)
+                return
+             else:
+                print("IDK") # IDK how it would get here
+                return
+      if client["client"] == "prompter": # if role is prompter, give it to prompter
+         Sess: Session = None
+         with agi_lock: # for thread safety
+          if sessionNum < len(active_game_instances):
+           Sess = active_game_instances[sessionNum]
+          else:
+           Sess = active_game_instances[0] # fallback
+         prompter(conn=conn, addr=addr, sess=Sess) #prompter method
+      if client["client"] == "viewer": # if role is viewer, give it to viewer
+         Sess: Session = None
+         with agi_lock: # for thread safety
+          if sessionNum < len(active_game_instances):
+           Sess = active_game_instances[sessionNum]
+          else:
+           Sess = active_game_instances[0] # fallback
+         viewer(conn=conn, addr=addr, sess=Sess) #viewer code (send to other function)
+    except Exception as err: # for any exception, print the error
+       print(err)
     conn.close() # close connection when done
     print(f"Client disconnected: {addr}")
 
