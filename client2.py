@@ -60,13 +60,22 @@ class Client:
         # Background change
         self.root.after(0, self.transition_color)
 
-        # Create invitations box
-#         tk.Label(self.root, text='Invite a friend:').pack()
-#         self.invite_entry = tk.Entry(self.root)
-#         self.invite_entry.pack()
-#         tk.Button(self.root, text='Invite', command=self.create_invitation).pack()
-        invite_button = tk.Button(self.root, text='Invite', command=self.show_invite_dialog).pack()
+#         invite_button = tk.Button(self.root, text='Invite', command=self.show_invite_dialog).pack(side="left")
 
+        # Create invitation system
+        invitation_frame = tk.Frame(self.root)
+        invitation_frame.pack()
+        tk.Label(invitation_frame, text="Want to join:").grid(row=0, column=0)
+        self.want_to_join_label = tk.Label(invitation_frame, text="")
+        self.want_to_join_label.grid(row=0, column=1)
+        self.invite_button = tk.Button(invitation_frame, text="Invite", command=self.invite_person, state="disabled")
+        self.invite_button.grid(row=0, column=2)
+        tk.Label(invitation_frame, text="Invite code:").grid(row=1, column=0)
+        self.invite_code_entry = tk.Entry(invitation_frame)
+        self.invite_code_entry.grid(row=1, column=1)
+        self.invite_code_button = tk.Button(invitation_frame, text="Join", command=self.join_session)
+        self.invite_code_button.grid(row=1, column=2)
+        
         # Create voting box
         vote_frame = tk.Frame(self.root)
         vote_frame.pack()
@@ -104,30 +113,35 @@ class Client:
         # Send an invitation to another client at the given address
         message = f"INVITE {self.username}"
         self.tcp_socket.sendto(message.encode(), peer_address)
-    def show_invite_dialog(self):
-        # Show a dialog box where the user can enter the IP address and port number of the client they want to invite
-        invite_dialog = tk.Toplevel()
-        invite_dialog.title('Invite a Friend')
+    def invite_person(self):
+        # Prompt user to select a person to invite
+        person = messagebox.askquestion("Invite", "Who do you want to invite?")
+        if person == "yes":
+            # Send invitation over TCP to server
+            self.tcp_socket.send(f"invite:{person}".encode())
 
-        ip_label = tk.Label(invite_dialog, text='IP Address:')
-        ip_label.grid(row=0, column=0)
-        self.ip_entry = tk.Entry(invite_dialog)
-        self.ip_entry.grid(row=0, column=1)
+    def join_session(self):
+        # Send join request over TCP to server
+        invite_code = self.invite_code_entry.get()
+        self.tcp_socket.send(f"join:{invite_code}".encode())
 
-        port_label = tk.Label(invite_dialog, text='Port Number:')
-        port_label.grid(row=1, column=0)
-        self.port_entry = tk.Entry(invite_dialog)
-        self.port_entry.grid(row=1, column=1)
+    def handle_invite(self, person):
+        # Add person to want to join list and update label
+        self.want_to_join.add(person)
+        self.want_to_join_label.config(text=", ".join(self.want_to_join))
+        self.invite_button.config(state="normal")
 
-        send_button = tk.Button(invite_dialog, text='Send Invitation', command=self.send_invitation_dialog)
-        send_button.grid(row=2, column=0, columnspan=2)
-        
-    def send_invitation_dialog(self):
-        # Get the IP address and port number from the invitation dialog and send an invitation to the client at that address
-        ip_address = self.ip_entry.get()
-        port_number = int(self.port_entry.get())
-        peer_address = (ip_address, port_number)
-        self.send_invitation(peer_address)
+    def handle_join(self, invite_code):
+        # Disable join button and clear invite code entry
+        self.invite_code_button.config(state="disabled")
+        self.invite_code_entry.delete(0, tk.END)
+
+    def handle_leave(self, person):
+        # Remove person from want to join list and update label
+        self.want_to_join.discard(person)
+        self.want_to_join_label.config(text=", ".join(self.want_to_join))
+        if not self.want_to_join:
+            self.invite_button.config(state="disabled")
     
     def run(self):
         # Start GUI event loop
