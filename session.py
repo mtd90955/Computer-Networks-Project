@@ -1,4 +1,4 @@
-import socket, threading, typing
+import socket, threading, typing, time
 from util import convert, deconvert
 
 CHUNK = 1024 # sending and receiving size
@@ -135,18 +135,16 @@ class Session:
         } # prompt dictionary
        with self.music_socket_lock: # for thread safety
           if self.music_socket is not None: # if music socket is set
-             self.music_socket.send(convert(prompt)) # send prompt
-             stop: bool = False
-             while not stop: # while end has not been reached
-                message = self.music_socket.recv(4 * CHUNK) # receive data
-                data = deconvert(message) # convert data to dict
-                if type(data) == str: # if something went wrong
-                   print("ValueError in promptMusic")
-                   return buffer # return incomplete buffer
-                if data["data"] == "end" or data["end"] == "True": # if it is the end
-                   stop = True # discontinue the loop
-                   continue
-                buffer += data["data"] # concatinate received data
+             try:
+               self.music_socket.send(convert(prompt)) # send prompt
+               stop: bool = False
+               time.sleep(50)
+               while not stop: # while end has not been reached
+                  self.music_socket.settimeout(20)
+                  message = self.music_socket.recv(4 * CHUNK) # receive data
+                  buffer += str(message) # concatinate received data
+             except Exception as err:
+                stop = True
           else: # if not set
              return None # return None
        return buffer # return complete buffer

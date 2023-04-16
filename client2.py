@@ -12,7 +12,7 @@ SERVER_UDP_PORT = 2352
 MAX_CONNECTIONS = 50
 AUDIO_BUFFER_SIZE = 1024
 SESSION_NUM = 0 if len(sys.argv) < 4 else int(sys.argv[3])
-ROLE = "viewer" if len(sys.argv) < 5 else int(sys.argv[4])
+ROLE = "viewer" if len(sys.argv) < 5 else sys.argv[4]
 
 class Client2:
         def __init__(self):
