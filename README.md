@@ -15,6 +15,7 @@ The server will be listening on port 2351 and will allow at most 50 connections 
 
 ## Instructions:
 - pip install -r requirements.txt
+    - Note: if on ubuntu
 - python server.py
     - This will initialize the server and create an ngrok tunnel
         - Note: The ngrok tunnel's ip address and port will be printed

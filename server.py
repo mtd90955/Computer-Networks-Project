@@ -166,6 +166,8 @@ def handle_client_connection(conn: socket.socket, addr):
                 print("IDK") # IDK how it would get here
                 return
       if client["client"] == "prompter": # if role is prompter, give it to prompter
+         with cs_lock:
+            cSocks.append(conn)
          Sess: Session = None
          with agi_lock: # for thread safety
           if sessionNum < len(active_game_instances) and sessionNum >= 0:
@@ -176,6 +178,8 @@ def handle_client_connection(conn: socket.socket, addr):
            Sess = active_game_instances[0] # fallback
          prompter(conn=conn, addr=addr, sess=Sess) #prompter method
       if client["client"] == "viewer": # if role is viewer, give it to viewer
+         with cs_lock:
+            cSocks.append(conn)
          Sess: Session = None
          with agi_lock: # for thread safety
           if sessionNum < len(active_game_instances) and sessionNum >= 0:
