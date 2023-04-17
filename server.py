@@ -41,7 +41,7 @@ def prompter(conn: socket.socket, addr, sess: Session):
       if type(client) == str: # if something went wrong
         print("ValueError")
       if client["task"] == "prompt": # if they want to prompt, let them
-          newChunk: Union[str, None] = sess.promptMusic(client["promptStart"], client["promptEnd"])
+          newChunk: Union[bytes, None] = sess.promptMusic(client["promptStart"], client["promptEnd"])
           if newChunk == None: # if the Music is nonexistant
             print("Riffusion is not setup yet")
           else: # else, add the prompt

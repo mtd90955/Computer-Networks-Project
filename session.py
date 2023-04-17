@@ -11,20 +11,20 @@ class Prompt:
    promptStart: str
    promptEnd: str
    prompt_lock: threading.Lock = threading.Lock()
-   promptMusic: str
+   promptMusic: bytes
    prompt_music_lock: threading.Lock = threading.Lock()
    votes_up: int = 0
    votes_down: int = 0
    vote_lock: threading.Lock = threading.Lock()
 
-   def __init__(self, promptStart: str, promptEnd: str, promptMusic: str):
+   def __init__(self, promptStart: str, promptEnd: str, promptMusic: bytes):
         """
         Initializes `Prompt` object.
 
         Parameters:
          promptStart (str): the starting prompt.
          promptEnd (str): the ending propt.
-         promptMusic (str): The string version of the bytes array of music
+         promptMusic (bytes): The string version of the bytes array of music
         """
         self.promptStart = promptStart
         self.promptEnd = promptEnd
@@ -91,14 +91,14 @@ class Prompt:
          temp = self.promptStart
       return temp
 
-   def getPromptMusic(self) -> str:
+   def getPromptMusic(self) -> bytes:
       """
       Gets the music string of the prompt.
 
       Returns:
-         str: The music string of the prompt.
+         bytes: The music string of the prompt.
       """
-      temp: str = ""
+      temp: bytes = b""
       with self.prompt_music_lock: # for thread safety
          temp = self.promptMusic
       return temp
@@ -117,7 +117,7 @@ class Session:
     prompts_lock: threading.Lock = threading.Lock()
     
 
-    def promptMusic(self, promptStart: str, promptEnd: str) -> typing.Union[str, None]:
+    def promptMusic(self, promptStart: str, promptEnd: str) -> typing.Union[bytes, None]:
        """
        Tries to get music from the riffusion client (music_socket).
 
@@ -126,9 +126,9 @@ class Session:
          promptEnd (str): the ending prompt.
 
        Returns:
-         str | None: a string of music data (encoded from bytes) or None if unsuccessful.
+         bytes | None: a string of music data (encoded from bytes) or None if unsuccessful.
        """
-       buffer: str = "" # string buffer
+       buffer: bytes = b"" # string buffer
        prompt: dict[str, str] = {
           "promptStart": promptStart,
           "promptEnd": promptEnd,
@@ -142,7 +142,7 @@ class Session:
                while not stop: # while end has not been reached
                   self.music_socket.settimeout(20)
                   message = self.music_socket.recv(4 * CHUNK) # receive data
-                  buffer += str(message) # concatinate received data
+                  buffer += message # concatinate received data
              except Exception as err:
                 stop = True
           else: # if not set
