@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import messagebox
 from util import convert, deconvert # Message conveersion
 import sys # command line args
+import random, math
 
 # Constants
 SERVER_ADDRESS = '3.13.191.225' if len(sys.argv) < 2 else sys.argv[1]
@@ -13,6 +14,7 @@ MAX_CONNECTIONS = 50
 AUDIO_BUFFER_SIZE = 1024
 SESSION_NUM = 0 if len(sys.argv) < 4 else int(sys.argv[3])
 ROLE = "viewer" if len(sys.argv) < 5 else sys.argv[4]
+PERSON = "" if len(sys.argv) < 6 else sys.argv[5]
 
 class Client2:
         def __init__(self):
@@ -30,12 +32,34 @@ class Client2:
         
                 # Initialize GUI
                 self.root = tk.Tk()
+                self.current_color = '#FFFFFF'
+                self.target_color = self.generate_random_color()
+                self.root.configure(bg=self.current_color)
+                self.root.geometry("500x500+200+200") 
                 self.root.title('Riffusion Client')
                 self.create_widgets()
                 self.initConnection(ROLE.lower() == "prompter", SESSION_NUM)
+                t1: threading.Thread = threading.Thread(target=self.handle_things)
+                t1.start()
                 self.root.mainloop()
         
         def create_widgets(self):
+                self.root.after(0, self.transition_color)
+
+                # Create invitation system
+                invitation_frame = tk.Frame(self.root)
+                invitation_frame.pack()
+                tk.Label(invitation_frame, text="Want to join:").grid(row=0, column=0)
+                self.want_to_join_label = tk.Label(invitation_frame, text="")
+                self.want_to_join_label.grid(row=0, column=1)
+                self.invite_button = tk.Button(invitation_frame, text="Invite", command=self.invite_person, state="disabled")
+                self.invite_button.grid(row=0, column=2)
+                tk.Label(invitation_frame, text="Invite code:").grid(row=1, column=0)
+                self.invite_code_entry = tk.Entry(invitation_frame)
+                self.invite_code_entry.grid(row=1, column=1)
+                self.invite_code_button = tk.Button(invitation_frame, text="Join", command=self.join_session)
+                self.invite_code_button.grid(row=1, column=2)
+
                 # Create prompt entry box
                 tk.Label(self.root, text='Enter prompt to play music:').pack()
                 self.prompt_entry = tk.Entry(self.root)
@@ -45,18 +69,29 @@ class Client2:
                 self.send_prompt_button = tk.Button(self.root, text='Send Prompt', command=self.send_prompt)
                 self.send_prompt_button.pack()
                 tk.Button(self.root, text='Guess Prompt', command=self.guess_prompt).pack()
-        
-                # Create invitations box
-                tk.Label(self.root, text='Invitations:').pack()
-                self.invitations_listbox = tk.Listbox(self.root)
-                self.invitations_listbox.pack()
-                tk.Button(self.root, text='Invite', command=self.send_invitation).pack()
+
+                # Create option menu
+                varList = tk.StringVar(self.root)
+                varList.set("1")
+                self.sel = 1
+                self.om = tk.OptionMenu(self.root, varList, "1", "2", command=self.setSel)
+                self.om.pack()
         
                 # Create voting box
-                tk.Label(self.root, text='Vote for best prompt/music:').pack()
-                self.votes_listbox = tk.Listbox(self.root)
-                self.votes_listbox.pack()
-                tk.Button(self.root, text='Vote', command=self.send_vote).pack()
+                vote_frame = tk.Frame(self.root)
+                vote_frame.pack()
+                # Create good vote button and count label
+                self.good_votes = 0
+                tk.Button(vote_frame, text='Good', command=self.cast_good_vote).grid(row=0, column=0)
+                tk.Label(vote_frame, text='Good Votes:').grid(row=0, column=1)
+                self.good_count_label = tk.Label(vote_frame, text="Vote now to see vote count")
+                self.good_count_label.grid(row=0, column=2)
+                # Create bad vote button and count label
+                self.bad_votes = 0
+                tk.Button(vote_frame, text='Bad', command=self.cast_bad_vote).grid(row=1, column=0)
+                tk.Label(vote_frame, text='Bad Votes:').grid(row=1, column=1)
+                self.bad_count_label = tk.Label(vote_frame, text="Vote now to see vote count")
+                self.bad_count_label.grid(row=1, column=2)
         
         def send_prompt(self):
                 # Send prompt to server over TCP
@@ -68,7 +103,7 @@ class Client2:
         def guess_prompt(self):
                 # Send guess prompt request to server over TCP                
                 prompt = self.prompt_entry.get()
-                msg = {"task": "guess", "prompt": prompt, "promptNum": 0}
+                msg = {"task": "guess", "prompt": prompt, "promptNum": self.sel}
                 self.tcp_socket.send(convert(msg))
                 mess = self.tcp_socket.recv(1024)
                 truth = deconvert(mess)
@@ -76,16 +111,36 @@ class Client2:
                        print("Error: truth")
                 else:
                        self.guess = truth["truth"] == "True"
-
-        def send_invitation(self):
-                # Send invitation to server over TCP
-                invitation = self.invitations_listbox.get(tk.ACTIVE)
-                self.tcp_socket.send(f'invite {invitation}'.encode())
         
-        def send_vote(self):
+        def send_vote(self, vote: bool):
                 # Send vote to server over TCP
-                vote = self.votes_listbox.get(tk.ACTIVE)
-                self.tcp_socket.send(f'vote {vote}'.encode())
+                num = self.sel
+                self.tcp_socket.send(convert({"vote": vote, "task": "vote", "promptNum": num}))
+
+        def cast_good_vote(self):
+            # Send current vote counts over TCP to server
+            self.send_vote(True)
+            self.show_votes()
+    
+        def cast_bad_vote(self):
+            # Send current vote counts over TCP to server
+            self.send_vote(False)
+            self.show_votes()
+    
+        def show_votes(self):
+            # get the dict
+            data = self.tcp_socket.recv(1024)
+            resp = deconvert(data) # deconvert dict
+            if type(resp) == str: # if failed
+                  return
+            # Split the vote data into good and bad vote counts
+            good = resp["up"]
+            bad = resp["down"]
+            self.bad_count_label.config(text=str(bad))
+            self.good_count_label.config(text=str(good))
+
+        def setSel(self, sel):
+                self.sel = int(sel)
         
         def initConnection(self, prompter: bool, sessionNum: int):
                 msg: dict = {"client": "prompter" if prompter else "viewer", "sessionNum": str(sessionNum)}
@@ -99,5 +154,95 @@ class Client2:
                     if not data:
                         break
 
+        def generate_random_color(self):
+            # Generate a random hexadecimal color code
+            r = random.randint(0, 255)
+            g = random.randint(0, 255)
+            b = random.randint(0, 255)
+            return '#{:02x}{:02x}{:02x}'.format(r, g, b)
+
+        def transition_color(self):
+            net: int = self.net # old net
+            ask: dict = {"task": "ask"} # task
+            self.tcp_socket.sendall(convert(ask)) # send it
+            message = self.tcp_socket.recv(1024) # receive answer
+            answer = deconvert(message) # get dict
+            if type(answer) == str: # if failed
+                   print("Error: answer")
+                   return
+            else: # else, set net
+                   self.net = int(answer["net"])
+            if self.net == net: # if net has not changed
+                return
+            # Update the target color if the current color has reached it
+            if self.current_color == self.target_color:
+                self.target_color = self.generate_random_color()
+
+            # Calculate the distance between the current color and target color
+            r1, g1, b1 = tuple(int(self.current_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+            r2, g2, b2 = tuple(int(self.target_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+            distance = math.sqrt((r2 - r1) ** 2 + (g2 - g1) ** 2 + (b2 - b1) ** 2)
+
+            # Adjust the speed of the transition based on the distance
+            speed = 0.1 * distance / 255
+
+            # Update the current color to smoothly transition to the target color
+            r = int(r1 + (r2 - r1) * speed)
+            g = int(g1 + (g2 - g1) * speed)
+            b = int(b1 + (b2 - b1) * speed)
+            self.current_color = '#{:02x}{:02x}{:02x}'.format(r, g, b)
+            self.root.configure(bg=self.current_color)
+
+            # Schedule the next color transition after a delay of 100 ms
+            self.root.after(3000, self.transition_color)
+
+        def send_invitation(self, peer_address):
+            # Send an invitation to another client at the given address
+            message = {"INVITE": self.username, "task": "INVITE"}
+            self.tcp_socket.sendto(convert(message), peer_address)
+
+        def invite_person(self):
+            # Prompt user to select a person to invite
+            person = messagebox.askquestion("Invite", "Who do you want to invite?")
+            if person == "yes":
+                # Send invitation over TCP to server
+                self.tcp_socket.send(convert({"invite": person, "task": "invite"}))
+
+        def join_session(self):
+            # Send join request over TCP to server
+            invite_code = self.invite_code_entry.get()
+            self.tcp_socket.send(convert({"join": invite_code, "task": "join"}))
+
+        def handle_invite(self, person: str, sessNum: str):
+            # Prompt user to confirm invitation
+            confirmed = messagebox.askyesno("Invitation", f"{person} has invited you to join their session. Do you want to join?")
+            if confirmed:
+                # Send confirmation message over TCP to server
+                self.tcp_socket.send({"invite_confirmed": person, "task": "invite_confirmed", "sessNum": sessNum})
+                # Disable invite button until next invitation is received
+                self.invite_button.config(state="disabled")
+
+        def handle_join(self, invite_code):
+            # Disable join button and clear invite code entry
+            self.invite_code_button.config(state="disabled")
+            self.invite_code_entry.delete(0, tk.END)
+
+        def handle_leave(self, person):
+            # Remove person from want to join list and update label
+            self.want_to_join.discard(person)
+            self.want_to_join_label.config(text=", ".join(self.want_to_join))
+            if not self.want_to_join:
+                self.invite_button.config(state="disabled")
+
+        def handle_things(self):
+              while True:
+                    message = self.tcp_socket.recv(1024)
+                    data = deconvert(message) # get dict
+                    if type(data) == str: # if failed
+                          break
+                    if data["task"] == "error":
+                          print(data["error"])
+                    if data["task"] == "want_to_join":
+                          self.handle_invite(data["want_to_join"], data["sessNum"])
 
 client2 = Client2()

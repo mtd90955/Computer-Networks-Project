@@ -22,8 +22,71 @@ MAX_GAME_INSTANCES = 1
 active_game_instances: list[Session] = [Session() for _ in range(MAX_GAME_INSTANCES)] # list compression
 agi_lock: threading.Lock = threading.Lock() # active instances lock
 
+# List of client sockets
+cSocks: list[socket.socket] = []
+cs_lock: threading.Lock = threading.Lock()
+
+# List of wanted clients
+wClients: list[str] = []
+wc_lock: threading.Lock = threading.Lock()
+
 udp_socket: socket.socket
 udp_lock: threading.Lock = threading.Lock()
+
+def helper(conn: socket.socket, addr, sess: Session, client: dict) -> bool:
+   if client["task"] == "vote" and sess != None: # if they want to vote, let them
+      vote: bool = bool(client["vote"])
+      num = int(client["promptNum"])
+      if sess.vote(voting=vote, promptNum=num):
+         prompt = sess.getPrompts()[num]
+         d: dict[str, str] = {"up": prompt.getVotesUp(), "down": prompt.getVotesDown()}
+         conn.sendall(convert(d))
+   if client["task"] == "guess" and sess != None: # if they want to guess, let them
+      prompts: list[Prompt] = sess.getPrompts() # get prompts
+      promptNum: int = int(client["promptNum"])
+      if promptNum < len(prompts): # if promptNum is within bounds
+         truth: bool = prompts[promptNum].getPrompt().lower() == client["prompt"].lower() # compare
+         d: dict = {"truth": str(truth)} # make the truth known
+         conn.sendall(convert(d)) # send it to them
+   if client["task"] == "end": # if they want it to end, let them
+      conn.close() # close conection
+      return False # stop while loop
+   if client["task"] == "ask" and sess != None: # ask
+      answer: dict = {"net": 0}
+      prompts = sess.getPrompts()
+      for prompt in prompts:
+         answer["net"] += prompt.getNetVotes()
+      conn.sendall(convert(answer))
+   if client["task"] == "invite": # client wants to invite
+      person = client["invite"]
+      sessNum = 0
+      with agi_lock:
+         sessNum = active_game_instances.index(sess)
+      with wc_lock:
+         wClients.add(person)
+      with cs_lock:
+         for client in cSocks:
+             client.sendall({"want_to_join": person, "task": "want_to_join", "sessNum": sessNum})
+   if client["task"] == "join": # client wants to join
+       invite_code = client["join"]
+       with agi_lock:
+         b: bool = False
+         for session in active_game_instances:
+            if invite_code == session.getInviteCode():
+                viewer(conn, addr, session)
+                b= True
+         if not b:
+             conn.send({"task": "error", "error": "Invalid invite code"})
+   if client["task"] == "invite_confirmed": # client wants to join an invite sess
+      sessNum: int = int(client["sessNum"])
+      Sess = None
+      with agi_lock:
+         if sessNum < len(active_game_instances):
+            Sess = active_game_instances[sessNum]
+         else:
+            return False
+         viewer(conn, addr, Sess)
+   return True
 
 def prompter(conn: socket.socket, addr, sess: Session):
    """
@@ -40,7 +103,7 @@ def prompter(conn: socket.socket, addr, sess: Session):
       client = deconvert(message) # deconvert message to dict
       if type(client) == str: # if something went wrong
         print("ValueError")
-      if client["task"] == "prompt": # if they want to prompt, let them
+      if client["task"] == "prompt" and sess != None: # if they want to prompt, let them
           newChunk: Union[bytes, None] = sess.promptMusic(client["promptStart"], client["promptEnd"])
           if newChunk == None: # if the Music is nonexistant
             print("Riffusion is not setup yet")
@@ -51,20 +114,7 @@ def prompter(conn: socket.socket, addr, sess: Session):
                promptMusic=newChunk,
             ) # new prompt
             sess.addPrompt(prompt=prompt)
-      if client["task"] == "vote": # if they want to vote, let them
-         vote: bool = bool(client["vote"])
-         sess.vote(voting=vote, promptNum=client["promptNum"])
-      if client["task"] == "guess": # if they want to guess, let them
-         prompts: list[Prompt] = sess.getPrompts() # get prompts
-         promptNum: int = int(client["promptNum"])
-         if promptNum < len(prompts): # if promptNum is within bounds
-            truth: bool = prompts[promptNum].getPrompt().lower() == client["prompt"].lower() # compare
-            d: dict = {"truth": str(truth)} # make the truth known
-            conn.sendall(convert(d)) # send it to them
-      if client["task"] == "end": # if they want it to end, let them
-         stop = True # stop
-         conn.close() # close conection
-         continue
+      stop = not helper(conn, addr, sess, client)
 
 
 def viewer(conn: socket.socket, addr, sess: Session):
@@ -82,20 +132,7 @@ def viewer(conn: socket.socket, addr, sess: Session):
       client = deconvert(message) # deconvert message to dict
       if type(client) == str: # if something went wrong
         print("ValueError")
-      if client["task"] == "vote": # if they want to vote, let them
-         vote: bool = bool(client["vote"])
-         sess.vote(voting=vote, promptNum=client["promptNum"])
-      if client["task"] == "guess": # if they want to guess, let them
-         prompts: list[Prompt] = sess.getPrompts() # get prompts
-         promptNum: int = int(client["promptNum"])
-         if promptNum < len(prompts): # if promptNum is within bounds
-            truth: bool = prompts[promptNum].getPrompt().lower() == client["prompt"].lower() # compare
-            d: dict = {"truth": str(truth)} # make the truth known
-            conn.sendall(convert(d)) # send it to them
-      if client["task"] == "end": # if they want it to end, let them
-         stop = True # stop
-         conn.close() # close conection
-         continue
+      stop = not helper(conn, addr, sess, client)
 
 # Function to handle client connections
 def handle_client_connection(conn: socket.socket, addr):
@@ -130,16 +167,20 @@ def handle_client_connection(conn: socket.socket, addr):
       if client["client"] == "prompter": # if role is prompter, give it to prompter
          Sess: Session = None
          with agi_lock: # for thread safety
-          if sessionNum < len(active_game_instances):
+          if sessionNum < len(active_game_instances) and sessionNum >= 0:
            Sess = active_game_instances[sessionNum]
+          elif sessionNum == -1:
+           Sess = None
           else:
            Sess = active_game_instances[0] # fallback
          prompter(conn=conn, addr=addr, sess=Sess) #prompter method
       if client["client"] == "viewer": # if role is viewer, give it to viewer
          Sess: Session = None
          with agi_lock: # for thread safety
-          if sessionNum < len(active_game_instances):
+          if sessionNum < len(active_game_instances) and sessionNum >= 0:
            Sess = active_game_instances[sessionNum]
+          elif sessionNum == -1:
+           Sess = None
           else:
            Sess = active_game_instances[0] # fallback
          viewer(conn=conn, addr=addr, sess=Sess) #viewer code (send to other function)

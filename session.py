@@ -115,6 +115,16 @@ class Session:
     prompters_lock: threading.Lock = threading.Lock()
     prompts: list[Prompt] = []
     prompts_lock: threading.Lock = threading.Lock()
+    session_code: str = "0101"
+
+    def getInviteCode(self) -> str:
+       """
+       Gets the session code.
+       
+       Returns:
+         str: the session code string.
+      """
+       return self.session_code
     
 
     def promptMusic(self, promptStart: str, promptEnd: str) -> typing.Union[bytes, None]:
