@@ -11,6 +11,7 @@ from typing import Union # for multithreading
 from session import Session, Prompt # Game Session info
 from util import convert, deconvert, get_ngrok_public_ip_address # Message conversion
 from pyngrok import ngrok # to avoid hosting server
+ngrok.set_auth_token("2DaRNugWZw7jrHWLOUvKwrm88BY_816JczcVsUEVtfz4LXbWC")
 ngrok.kill() # Ensures no starting connection
 # Maximum number of connections allowed
 MAX_CONNECTIONS = 50
