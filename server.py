@@ -1,0 +1,218 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Mar 12 14:49:26 2023
+
+@author: kpk16
+"""
+
+import socket # for sockets
+import threading
+import ast
+import pydub
+from playsound import playsound
+import io
+import pyaudio
+import wave
+pydub.AudioSegment.converter = r"C:C:\Users\kpk16\OneDrive\Desktop\cnjustin\ffmpeg-master-latest-win64-gpl-shared\bin\ffprobe.exe"
+from pydub import AudioSegment
+from pydub.playback import play
+import io
+from typing import Union # for multithreading
+from session import Session, Prompt # Game Session info
+from util import convert, deconvert, get_ngrok_public_ip_address # Message conversion
+from pyngrok import ngrok # to avoid hosting server
+ngrok.set_auth_token("2OW91hpcQ01VyzxVLt0qiECk6E7_7YVLVep5H58R8c9Gy1PNd")
+ngrok.kill() # Ensures no starting connection
+# Maximum number of connections allowed
+MAX_CONNECTIONS = 50
+# Maximum number of game instances allowed
+MAX_GAME_INSTANCES = 1
+# List of active game instances
+active_game_instances: list[Session] = [Session() for _ in range(MAX_GAME_INSTANCES)] # list compression
+agi_lock: threading.Lock = threading.Lock() # active instances lock
+udp_socket: socket.socket
+udp_lock: threading.Lock = threading.Lock()
+
+def prompter(conn: socket.socket, addr, sess: Session):
+   """
+   Handles the prompter connection.
+   Parameters:
+      conn (socket.socket): the socket to communicate with.
+      addr (Any): Not used atm.
+      sess (Session): The session the prompter is in.
+   """
+   stop: bool = False # do not stop
+   while not stop: # while not stopping
+      message = conn.recv(1024) # receive message
+      client = deconvert(message) # deconvert message to dict
+      if type(client) == str: # if something went wrong
+        print("ValueError")
+      if client["task"] == "prompt": # if they want to prompt, let them
+          newChunk: Union[bytes, None] = sess.promptMusic(client["promptStart"], client["promptEnd"])
+          # Set up the PyAudio object
+          # Convert the byte string to an in-memory file-like object
+          # Play the audio
+          # Set up the PyAudio object
+          p = pyaudio.PyAudio()
+         # Open the audio file (replace 'audio_bytes' with your bytes object)
+          stream = p.open(format=p.get_format_from_width(2),
+					channels=1,
+					rate=44100,
+					output=True,
+					frames_per_buffer=1024)
+          stream.write(newChunk)
+          if newChunk == None: # if the Music is nonexistant
+            print("Riffusion is not setup yet")
+          else: # else, add the prompt
+            prompt: Prompt = Prompt(
+               promptStart=client["promptStart"],
+               promptEnd=client["promptEnd"],
+               promptMusic=newChunk,
+            ) # new prompt
+            sess.addPrompt(prompt=prompt)
+      if client["task"] == "vote": # if they want to vote, let them
+         vote: bool = bool(client["vote"])
+         sess.vote(voting=vote, promptNum=client["promptNum"])
+      if client["task"] == "guess": # if they want to guess, let them
+         prompts: list[Prompt] = sess.getPrompts() # get prompts
+         promptNum: int = int(client["promptNum"])
+         if promptNum < len(prompts): # if promptNum is within bounds
+            truth: bool = prompts[promptNum].getPrompt().lower() == client["prompt"].lower() # compare
+            d: dict = {"truth": str(truth)} # make the truth known
+            conn.sendall(convert(d)) # send it to them
+      if client["task"] == "end": # if they want it to end, let them
+         stop = True # stop
+         conn.close() # close conection
+         continue
+
+
+def viewer(conn: socket.socket, addr, sess: Session):
+   """
+   Handles the viewer connection.
+   Parameters:
+      conn (socket.socket): the socket to communicate with.
+      addr (Any): Not used atm.
+      sess (Session): The session the viewer is in.
+   """
+   stop: bool = False # do not stop
+   while not stop: # while not stopping
+      message = conn.recv(1024) # receive message
+      client = deconvert(message) # deconvert message to dict
+      if type(client) == str: # if something went wrong
+        print("ValueError")
+      if client["task"] == "vote": # if they want to vote, let them
+         vote: bool = bool(client["vote"])
+         sess.vote(voting=vote, promptNum=client["promptNum"])
+      if client["task"] == "guess": # if they want to guess, let them
+         prompts: list[Prompt] = sess.getPrompts() # get prompts
+         promptNum: int = int(client["promptNum"])
+         if promptNum < len(prompts): # if promptNum is within bounds
+            truth: bool = prompts[promptNum].getPrompt().lower() == client["prompt"].lower() # compare
+            d: dict = {"truth": str(truth)} # make the truth known
+            conn.sendall(convert(d)) # send it to them
+      if client["task"] == "end": # if they want it to end, let them
+         stop = True # stop
+         conn.close() # close conection
+         continue
+
+# Function to handle client connections
+def handle_client_connection(conn: socket.socket, addr):
+    """
+    Handles the client connection.
+    Differentiates between the music client,
+    prompter and viewer.
+    Parameters:
+      conn (socket.socket): the client socket connection
+      addr (Any): the address of the client.
+    """
+    print(f"New client connected: {addr}")
+    # TODO: Implement game logic and audio transmission
+    try: # kill thread, print Error for any socket or conversion error not explicitly addressed
+      message = conn.recv(1024) # receive message
+      client = deconvert(message) # try to deconvert it
+      if type(client) == str: # if failed, report it and close connection
+        print("ValueError")
+        conn.send(bytes("Error: -1", "utf-8"))
+        conn.close()
+        return
+      sessionNum: int = int(client["sessionNum"]) # get the session number
+      if client["client"] == "music": # if role is to provide music, set it in session
+          with agi_lock:
+             if sessionNum < len(active_game_instances):
+                active_game_instances[sessionNum].setSocket(conn=conn)
+                return
+             else:
+                print("IDK") # IDK how it would get here
+                return
+      if client["client"] == "prompter": # if role is prompter, give it to prompter
+         Sess: Session = None
+         with agi_lock: # for thread safety
+          if sessionNum < len(active_game_instances):
+           Sess = active_game_instances[sessionNum]
+          else:
+           Sess = active_game_instances[0] # fallback
+         prompter(conn=conn, addr=addr, sess=Sess) #prompter method
+      if client["client"] == "viewer": # if role is viewer, give it to viewer
+         Sess: Session = None
+         with agi_lock: # for thread safety
+          if sessionNum < len(active_game_instances):
+           Sess = active_game_instances[sessionNum]
+          else:
+           Sess = active_game_instances[0] # fallback
+         viewer(conn=conn, addr=addr, sess=Sess) #viewer code (send to other function)
+    except Exception as err: # for any exception, print the error
+       print(err)
+    conn.close() # close connection when done
+    print(f"Client disconnected: {addr}")
+
+# Function to start the server
+def start_server():
+    """
+    Entry point for the server.
+    """
+    # Create a TCP socket and bind it to a specific port
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind(('', 2351))
+    server_socket.listen()
+    print("Server listening on port 2351")
+
+    # Setup UDP socket and bind it to port
+    global udp_socket
+    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
+    udp_socket.bind(('', (2352)))
+    print("Server listening on port 2352")
+
+    # set up ngrok tcp tunnel
+    tunnel = ngrok.connect(2351, "tcp")
+
+    # print the address and port number
+    print(get_ngrok_public_ip_address(tunnel))
+    
+    # Keep accepting new connections until the maximum number of connections is reached
+    while len(active_game_instances) <= MAX_GAME_INSTANCES:
+        try:
+            conn, addr = server_socket.accept()
+            # Check if the maximum number of connections has been reached
+            if len(active_game_instances) > MAX_GAME_INSTANCES:
+                conn.send(b"Server is busy. Please try again later.")
+                conn.close()
+                print(f"Rejected client connection: {addr}")
+                continue
+            # Start a new thread to handle the client connection
+            client_thread = threading.Thread(target=handle_client_connection, args=(conn, addr))
+            client_thread.start()
+        except KeyboardInterrupt:
+            # Stop the server if the user presses Ctrl-C
+            break
+
+    # Close the server socket when the maximum number of game instances has been reached
+    with agi_lock: # for thread safety
+       for session in active_game_instances: # for all game instances
+          session.disactivateMusic() # disconnect from music servers
+    server_socket.close() # close connections
+    udp_socket.close()
+    ngrok.disconnect(tunnel.public_url) # disconnect tunnel
+    ngrok.kill() # kill ngrok
+# Start the server
+start_server()
