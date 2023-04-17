@@ -14,7 +14,6 @@ MAX_CONNECTIONS = 50
 AUDIO_BUFFER_SIZE = 1024
 SESSION_NUM = 0 if len(sys.argv) < 4 else int(sys.argv[3])
 ROLE = "viewer" if len(sys.argv) < 5 else sys.argv[4]
-PERSON = "" if len(sys.argv) < 6 else sys.argv[5]
 
 class Client2:
         def __init__(self):
@@ -29,6 +28,8 @@ class Client2:
                 # Start audio receiver thread
                 #self.audio_thread = threading.Thread(target=self.receive_audio)
                 #self.audio_thread.start()
+
+                self.net = 0
         
                 # Initialize GUI
                 self.root = tk.Tk()
@@ -105,12 +106,6 @@ class Client2:
                 prompt = self.prompt_entry.get()
                 msg = {"task": "guess", "prompt": prompt, "promptNum": self.sel}
                 self.tcp_socket.send(convert(msg))
-                mess = self.tcp_socket.recv(1024)
-                truth = deconvert(mess)
-                if type(truth) == str:
-                       print("Error: truth")
-                else:
-                       self.guess = truth["truth"] == "True"
         
         def send_vote(self, vote: bool):
                 # Send vote to server over TCP
@@ -127,12 +122,7 @@ class Client2:
             self.send_vote(False)
             self.show_votes()
     
-        def show_votes(self):
-            # get the dict
-            data = self.tcp_socket.recv(1024)
-            resp = deconvert(data) # deconvert dict
-            if type(resp) == str: # if failed
-                  return
+        def show_votes(self, resp: dict):
             # Split the vote data into good and bad vote counts
             good = resp["up"]
             bad = resp["down"]
@@ -162,18 +152,8 @@ class Client2:
             return '#{:02x}{:02x}{:02x}'.format(r, g, b)
 
         def transition_color(self):
-            net: int = self.net # old net
             ask: dict = {"task": "ask"} # task
             self.tcp_socket.sendall(convert(ask)) # send it
-            message = self.tcp_socket.recv(1024) # receive answer
-            answer = deconvert(message) # get dict
-            if type(answer) == str: # if failed
-                   print("Error: answer")
-                   return
-            else: # else, set net
-                   self.net = int(answer["net"])
-            if self.net == net: # if net has not changed
-                return
             # Update the target color if the current color has reached it
             if self.current_color == self.target_color:
                 self.target_color = self.generate_random_color()
@@ -184,7 +164,7 @@ class Client2:
             distance = math.sqrt((r2 - r1) ** 2 + (g2 - g1) ** 2 + (b2 - b1) ** 2)
 
             # Adjust the speed of the transition based on the distance
-            speed = 0.1 * distance / 255
+            speed = 0.1 * distance * self.net / 255
 
             # Update the current color to smoothly transition to the target color
             r = int(r1 + (r2 - r1) * speed)
@@ -240,9 +220,15 @@ class Client2:
                     data = deconvert(message) # get dict
                     if type(data) == str: # if failed
                           break
-                    if data["task"] == "error":
+                    if data["task"] == "error": # if error
                           print(data["error"])
                     if data["task"] == "want_to_join":
                           self.handle_invite(data["want_to_join"], data["sessNum"])
+                    if data["task"] == "show": # if showing votes
+                          self.show_votes(data)
+                    if data["task"] == "guess": # if showing guess
+                          self.guess = data["truth"] == "True"
+                    if data["task"] == "answer": # if have answer
+                          self.net = data["net"]
 
 client2 = Client2()

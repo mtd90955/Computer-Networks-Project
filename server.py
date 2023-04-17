@@ -39,20 +39,20 @@ def helper(conn: socket.socket, addr, sess: Session, client: dict) -> bool:
       num = int(client["promptNum"])
       if sess.vote(voting=vote, promptNum=num):
          prompt = sess.getPrompts()[num]
-         d: dict[str, str] = {"up": prompt.getVotesUp(), "down": prompt.getVotesDown()}
+         d: dict[str, str] = {"up": prompt.getVotesUp(), "down": prompt.getVotesDown(), "task": "show"}
          conn.sendall(convert(d))
    if client["task"] == "guess" and sess != None: # if they want to guess, let them
       prompts: list[Prompt] = sess.getPrompts() # get prompts
       promptNum: int = int(client["promptNum"])
       if promptNum < len(prompts): # if promptNum is within bounds
          truth: bool = prompts[promptNum].getPrompt().lower() == client["prompt"].lower() # compare
-         d: dict = {"truth": str(truth)} # make the truth known
+         d: dict = {"truth": str(truth), "task": "guess"} # make the truth known
          conn.sendall(convert(d)) # send it to them
    if client["task"] == "end": # if they want it to end, let them
       conn.close() # close conection
       return False # stop while loop
    if client["task"] == "ask" and sess != None: # ask
-      answer: dict = {"net": 0}
+      answer: dict = {"net": 0, "task": "answer"}
       prompts = sess.getPrompts()
       for prompt in prompts:
          answer["net"] += prompt.getNetVotes()
