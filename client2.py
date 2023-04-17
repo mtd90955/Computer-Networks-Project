@@ -5,6 +5,7 @@ from tkinter import messagebox
 from util import convert, deconvert # Message conveersion
 import sys # command line args
 import random, math
+import pyaudio
 
 # Constants
 SERVER_ADDRESS = '3.13.191.225' if len(sys.argv) < 2 else sys.argv[1]
@@ -141,6 +142,14 @@ class Client2:
                 self.udp_socket.sendto("Hello".encode(), (SERVER_ADDRESS, SERVER_UDP_PORT))
                 while True:
                     data, addr = self.udp_socket.recvfrom(AUDIO_BUFFER_SIZE)
+                    p = pyaudio.PyAudio()
+                    # Open the audio file (replace 'audio_bytes' with your bytes object)
+                    stream = p.open(format=p.get_format_from_width(2),
+					channels=1,
+					rate=44100,
+					output=True,
+					frames_per_buffer=1024)
+                    stream.write(data)
                     if not data:
                         break
 

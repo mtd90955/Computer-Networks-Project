@@ -1,4 +1,9 @@
 pyngrok
 Tk
 gradio
+<<<<<<< HEAD
 pydub
+=======
+pydub
+pyaudio
+>>>>>>> main

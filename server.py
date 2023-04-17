@@ -7,18 +7,18 @@ Created on Sun Mar 12 14:49:26 2023
 
 import socket # for sockets
 import threading
+import io
+import pyaudio
 from typing import Union # for multithreading
 from session import Session, Prompt # Game Session info
 from util import convert, deconvert, get_ngrok_public_ip_address # Message conversion
 from pyngrok import ngrok # to avoid hosting server
-ngrok.set_auth_token("2DaRNugWZw7jrHWLOUvKwrm88BY_816JczcVsUEVtfz4LXbWC")
+ngrok.set_auth_token("2OW91hpcQ01VyzxVLt0qiECk6E7_7YVLVep5H58R8c9Gy1PNd")
 ngrok.kill() # Ensures no starting connection
 # Maximum number of connections allowed
 MAX_CONNECTIONS = 50
-
 # Maximum number of game instances allowed
 MAX_GAME_INSTANCES = 1
-
 # List of active game instances
 active_game_instances: list[Session] = [Session() for _ in range(MAX_GAME_INSTANCES)] # list compression
 agi_lock: threading.Lock = threading.Lock() # active instances lock
@@ -121,7 +121,6 @@ def prompter(conn: socket.socket, addr, sess: Session):
 def viewer(conn: socket.socket, addr, sess: Session):
    """
    Handles the viewer connection.
-
    Parameters:
       conn (socket.socket): the socket to communicate with.
       addr (Any): Not used atm.
@@ -141,7 +140,6 @@ def handle_client_connection(conn: socket.socket, addr):
     Handles the client connection.
     Differentiates between the music client,
     prompter and viewer.
-
     Parameters:
       conn (socket.socket): the client socket connection
       addr (Any): the address of the client.

@@ -15,7 +15,10 @@ The server will be listening on port 2351 and will allow at most 50 connections 
 
 ## Instructions:
 - pip install -r requirements.txt
+<<<<<<< HEAD
     - Note: if on ubuntu
+=======
+>>>>>>> main
 - python server.py
     - This will initialize the server and create an ngrok tunnel
         - Note: The ngrok tunnel's ip address and port will be printed
@@ -24,6 +27,10 @@ The server will be listening on port 2351 and will allow at most 50 connections 
     - run the first 2 cells (until and including pip commands)
     - reset runtime (versioning reasons)
     - run rest of the cells
+<<<<<<< HEAD
 - python client2.py [host-ip-addr] [host-ip-port] [sessionNum] [role]
     - Session number default is -1 (wanting to connect)
     - Role default is viewer
+=======
+- python client2.py [host-ip-addr] [host-ip-port] [sessionNum]
+>>>>>>> main
