@@ -1,6 +1,5 @@
 import socket, threading, typing, time
 from util import convert, deconvert
-import ast
 
 CHUNK = 1024 # sending and receiving size
 
@@ -116,6 +115,16 @@ class Session:
     prompters_lock: threading.Lock = threading.Lock()
     prompts: list[Prompt] = []
     prompts_lock: threading.Lock = threading.Lock()
+    session_code: str = "0101"
+
+    def getInviteCode(self) -> str:
+       """
+       Gets the session code.
+       
+       Returns:
+         str: the session code string.
+      """
+       return self.session_code
     
 
     def promptMusic(self, promptStart: str, promptEnd: str) -> typing.Union[bytes, None]:
@@ -143,7 +152,6 @@ class Session:
                while not stop: # while end has not been reached
                   self.music_socket.settimeout(20)
                   message = self.music_socket.recv(4 * CHUNK) # receive data
-                  
                   buffer += message # concatinate received data
              except Exception as err:
                 stop = True
