@@ -7,16 +7,8 @@ Created on Sun Mar 12 14:49:26 2023
 
 import socket # for sockets
 import threading
-import ast
-import pydub
-from playsound import playsound
 import io
 import pyaudio
-import wave
-pydub.AudioSegment.converter = r"C:C:\Users\kpk16\OneDrive\Desktop\cnjustin\ffmpeg-master-latest-win64-gpl-shared\bin\ffprobe.exe"
-from pydub import AudioSegment
-from pydub.playback import play
-import io
 from typing import Union # for multithreading
 from session import Session, Prompt # Game Session info
 from util import convert, deconvert, get_ngrok_public_ip_address # Message conversion
